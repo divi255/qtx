@@ -1,0 +1,20 @@
+* Why desktop apps in 2023?
+ - no HTTP (industrial devices, databases, clients for 3rd party web services etc.)
+ - sometimes they're just faster
+ - sometimes they require more access to the local machine than WASM can provide
+ - no limitations - use any crates, use multiple threads, use async runtimes (tokio)
+* Why Qt
+ - two big players (Qt and GTK)
+ - Qt looks a bit neater and more Enterprise-ready (but check the license)
+* Qt Designer (some prefer QML but it is out of scope of this video)
+* Qt app in Rust
+ - ritual (rust-qt) - the most complete bindings for Qt5. alternative - qmetaobject-rs and cxx-qt
+   https://github.com/KDAB/cxx-qt#comparison-to-other-rust-qt-bindings
+ - never block the main thread with I/O or heavy calc
+ - signals and slots
+ - QTimer as an alternative to data signal
+* Beware of auto-drops of dynamic widgets by Rust
+* No events (e.g. Window close) - use C++ wrappers
+* How to distribute apps
+ - cargo bundle (Linux/OSX)
+ - cargo wix (Windows)
