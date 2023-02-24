@@ -3,7 +3,6 @@ use qt_core::{qs, slot, QBox, QObject, QPtr, SignalNoArgs, SlotNoArgs};
 use qt_ui_tools::ui_form;
 use qt_widgets::{QApplication, QLineEdit, QPushButton, QWidget};
 use std::rc::Rc;
-use std::thread;
 use std::time::Duration;
 use unsafe_send_sync::UnsafeSend;
 
@@ -33,12 +32,12 @@ fn worker(
             }
         }
         if data_tx.send(Data::Counter(counter)).is_ok() {
-            println!("emitting signal from {:?}", thread::current().id());
+            println!("emitting signal from {:?}", std::thread::current().id());
             unsafe {
                 data_signal.emit();
             }
         }
-        thread::sleep(Duration::from_secs(1));
+        std::thread::sleep(Duration::from_secs(1));
         counter += 1;
     }
 }
@@ -91,7 +90,7 @@ impl Ui {
     }
     #[slot(SlotNoArgs)]
     fn handle_data(self: &Rc<Self>) {
-        println!("running handle data in {:?}", thread::current().id());
+        println!("running handle data in {:?}", std::thread::current().id());
         while let Ok(data) = self.data_rx.try_recv() {
             match data {
                 Data::Counter(v) => {
@@ -145,7 +144,7 @@ fn main() {
             data_signal.connect(&ui.slot_handle_data());
         }
         // run the background worker
-        thread::spawn(move || {
+        std::thread::spawn(move || {
             worker(command_rx, data_tx, data_signal);
         });
         // display the UI
