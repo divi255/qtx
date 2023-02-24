@@ -3,7 +3,6 @@ use qt_core::{qs, slot, QBox, QObject, QPtr, SignalNoArgs, SlotNoArgs};
 use qt_ui_tools::ui_form;
 use qt_widgets::{QApplication, QLineEdit, QPushButton, QWidget};
 use std::rc::Rc;
-use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 use unsafe_send_sync::UnsafeSend;
@@ -21,8 +20,8 @@ enum Data {
 
 // background worker
 fn worker(
-    command_rx: mpsc::Receiver<Command>,
-    data_tx: mpsc::SyncSender<Data>,
+    command_rx: std::sync::mpsc::Receiver<Command>,
+    data_tx: std::sync::mpsc::SyncSender<Data>,
     data_signal: UnsafeSend<QBox<SignalNoArgs>>,
 ) {
     let mut counter = 0;
@@ -34,8 +33,8 @@ fn worker(
             }
         }
         if data_tx.send(Data::Counter(counter)).is_ok() {
+            println!("emitting signal from {:?}", thread::current().id());
             unsafe {
-                println!("emitting signal from {:?}", thread::current().id());
                 data_signal.emit();
             }
         }
@@ -55,8 +54,8 @@ struct Main {
 // UI
 struct Ui {
     window: Main,
-    command_tx: mpsc::SyncSender<Command>,
-    data_rx: mpsc::Receiver<Data>,
+    command_tx: std::sync::mpsc::SyncSender<Command>,
+    data_rx: std::sync::mpsc::Receiver<Data>,
 }
 
 // reqired to transform Rust functions into slots
@@ -68,46 +67,64 @@ impl StaticUpcast<QObject> for Ui {
 
 impl Ui {
     // Rc required to transform Rust functions into slots
-    fn new(command_tx: mpsc::SyncSender<Command>, data_rx: mpsc::Receiver<Data>) -> Rc<Self> {
+    fn new(
+        command_tx: std::sync::mpsc::SyncSender<Command>,
+        data_rx: std::sync::mpsc::Receiver<Data>,
+    ) -> Rc<Self> {
+        let window = Main::load();
+        let ui = Rc::new(Ui {
+            window,
+            command_tx,
+            data_rx,
+        });
         unsafe {
-            let window = Main::load();
-            let ui = Rc::new(Ui {
-                window,
-                command_tx,
-                data_rx,
-            });
             ui.window
                 .btn_reset
                 .clicked()
                 .connect(&ui.slot_handle_btn_reset());
-            //let ctx = ui.command_tx.clone();
-            //ui.window
-            //.btn_reset
-            //.clicked()
-            //.connect(&SlotNoArgs::new(&ui.window.widget, move || {
-            //let _ = ctx.send(Command::Reset);
-            //}));
-            ui
         }
-    }
-    unsafe fn show(self: &Rc<Self>) {
-        println!("running show in {:?}", thread::current().id());
-        self.window.widget.show();
+        ui
     }
     #[slot(SlotNoArgs)]
-    unsafe fn handle_btn_reset(self: &Rc<Self>) {
+    fn handle_btn_reset(self: &Rc<Self>) {
         let _ = self.command_tx.send(Command::Reset);
     }
     #[slot(SlotNoArgs)]
-    unsafe fn handle_data(self: &Rc<Self>) {
+    fn handle_data(self: &Rc<Self>) {
         println!("running handle data in {:?}", thread::current().id());
         while let Ok(data) = self.data_rx.try_recv() {
             match data {
                 Data::Counter(v) => {
-                    self.window.counter.set_text(&qs(v.to_string()));
+                    unsafe {
+                        self.window.counter.set_text(&qs(v.to_string()));
+                    };
                 }
             }
         }
+    }
+    fn new2(
+        command_tx: std::sync::mpsc::SyncSender<Command>,
+        data_rx: std::sync::mpsc::Receiver<Data>,
+    ) -> Rc<Self> {
+        let window = Main::load();
+        let ui = Rc::new(Ui {
+            window,
+            command_tx,
+            data_rx,
+        });
+        let ctx = ui.command_tx.clone();
+        // define a slot manually using a code closure
+        unsafe {
+            ui.window
+                .btn_reset
+                .clicked()
+                .connect(&SlotNoArgs::new(&ui.window.widget, move || {
+                    // the main object is under Rc as it needs to be cloned to be moved into the
+                    // slot closure if required
+                    let _ = ctx.send(Command::Reset);
+                }));
+        }
+        ui
     }
 }
 
@@ -116,27 +133,29 @@ fn main() {
     std::env::set_var("QT_AUTO_SCREEN_SCALE_FACTOR", "1");
     QApplication::init(|_| {
         // command channel
-        let (command_tx, command_rx) = mpsc::sync_channel::<Command>(64);
+        let (command_tx, command_rx) = std::sync::mpsc::sync_channel::<Command>(64);
         // data channel
-        let (data_tx, data_rx) = mpsc::sync_channel::<Data>(64);
+        let (data_tx, data_rx) = std::sync::mpsc::sync_channel::<Data>(64);
         // construct UI
         let ui = Ui::new(command_tx.clone(), data_rx);
+        // data signal
+        let data_signal = UnsafeSend::new(unsafe { SignalNoArgs::new() });
+        // connect data signal with UI handle_data slot method
         unsafe {
-            // data signal
-            let data_signal = UnsafeSend::new(SignalNoArgs::new());
-            // connect data signal with UI handle_data slot method
             data_signal.connect(&ui.slot_handle_data());
-            // run the background worker
-            thread::spawn(move || {
-                worker(command_rx, data_tx, data_signal);
-            });
-            // display the UI
-            ui.show();
-            // exec the Qt application
-            let result: i32 = QApplication::exec();
-            // optionally terminate the background worker
-            command_tx.send(Command::Quit).unwrap();
-            result
         }
+        // run the background worker
+        thread::spawn(move || {
+            worker(command_rx, data_tx, data_signal);
+        });
+        // display the UI
+        unsafe {
+            ui.window.widget.show();
+        }
+        // exec the Qt application
+        let result: i32 = unsafe { QApplication::exec() };
+        // optionally terminate the background worker
+        command_tx.send(Command::Quit).unwrap();
+        result
     })
 }
