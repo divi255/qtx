@@ -108,19 +108,18 @@ impl Ui {
         let window = Main::load();
         let ui = Rc::new(Ui {
             window,
-            command_tx,
+            command_tx: command_tx.clone(),
             data_rx,
         });
-        let ctx = ui.command_tx.clone();
         // define a slot manually using a code closure
         unsafe {
             ui.window
                 .btn_reset
                 .clicked()
                 .connect(&SlotNoArgs::new(&ui.window.widget, move || {
-                    // the main object is under Rc as it needs to be cloned to be moved into the
-                    // slot closure if required
-                    let _ = ctx.send(Command::Reset);
+                    // the main object is under Rc as it needs to be cloned to be moved into a slot
+                    // closure if required
+                    let _ = command_tx.send(Command::Reset);
                 }));
         }
         ui
