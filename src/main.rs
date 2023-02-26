@@ -134,22 +134,20 @@ fn main() {
         let (command_tx, command_rx) = std::sync::mpsc::sync_channel::<Command>(64);
         // data channel
         let (data_tx, data_rx) = std::sync::mpsc::sync_channel::<Data>(64);
-        // construct UI
-        let ui = Ui::new(command_tx.clone(), data_rx);
         // data signal
         let data_signal = UnsafeSend::new(unsafe { SignalNoArgs::new() });
+        // construct UI
+        let ui = Ui::new(command_tx.clone(), data_rx);
         // connect data signal with UI handle_data slot method
         unsafe {
             data_signal.connect(&ui.slot_handle_data());
+            // display the UI
+            ui.window.widget.show();
         }
         // run the background worker
         std::thread::spawn(move || {
             worker(command_rx, data_tx, data_signal);
         });
-        // display the UI
-        unsafe {
-            ui.window.widget.show();
-        }
         // exec the Qt application
         let result: i32 = unsafe { QApplication::exec() };
         // optionally terminate the background worker
