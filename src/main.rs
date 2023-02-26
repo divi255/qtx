@@ -1,5 +1,5 @@
 use cpp_core::{Ptr, StaticUpcast};
-use qt_core::{qs, slot, QBox, QObject, QPtr, SignalNoArgs, SlotNoArgs};
+use qt_core::{slot, QBox, QObject, QPtr, SignalNoArgs, SlotNoArgs};
 use qt_ui_tools::ui_form;
 use qt_widgets::{QApplication, QLineEdit, QPushButton, QWidget};
 use std::rc::Rc;
@@ -95,7 +95,7 @@ impl Ui {
             match data {
                 Data::Counter(v) => {
                     unsafe {
-                        self.window.counter.set_text(&qs(v.to_string()));
+                        self.window.counter.set_text(&qt_core::qs(v.to_string()));
                     };
                 }
             }
