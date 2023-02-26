@@ -57,7 +57,7 @@ struct Ui {
     data_rx: std::sync::mpsc::Receiver<Data>,
 }
 
-// reqired to transform Rust functions into slots
+// required to transform Rust functions into slots
 impl StaticUpcast<QObject> for Ui {
     unsafe fn static_upcast(ptr: Ptr<Self>) -> Ptr<QObject> {
         ptr.window.widget.as_ptr().static_upcast()
