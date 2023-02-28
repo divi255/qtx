@@ -28,7 +28,7 @@ fn worker(
         while let Ok(command) = command_rx.try_recv() {
             match command {
                 Command::Reset => counter = 0,
-                Command::Quit => break,
+                Command::Quit => return,
             }
         }
         if data_tx.send(Data::Counter(counter)).is_ok() {
@@ -70,9 +70,8 @@ impl Ui {
         command_tx: std::sync::mpsc::SyncSender<Command>,
         data_rx: std::sync::mpsc::Receiver<Data>,
     ) -> Rc<Self> {
-        let window = Main::load();
         let ui = Rc::new(Ui {
-            window,
+            window: Main::load(),
             command_tx,
             data_rx,
         });
@@ -97,7 +96,7 @@ impl Ui {
                     unsafe {
                         self.window.counter.set_text(&qt_core::qs(v.to_string()));
                     };
-                }
+                } // match other data kinds if exist
             }
         }
     }
@@ -105,9 +104,8 @@ impl Ui {
         command_tx: std::sync::mpsc::SyncSender<Command>,
         data_rx: std::sync::mpsc::Receiver<Data>,
     ) -> Rc<Self> {
-        let window = Main::load();
         let ui = Rc::new(Ui {
-            window,
+            window: Main::load(),
             command_tx: command_tx.clone(),
             data_rx,
         });
@@ -130,25 +128,22 @@ fn main() {
     // 4K hack
     std::env::set_var("QT_AUTO_SCREEN_SCALE_FACTOR", "1");
     QApplication::init(|_| {
-        // command channel
         let (command_tx, command_rx) = std::sync::mpsc::sync_channel::<Command>(64);
-        // data channel
         let (data_tx, data_rx) = std::sync::mpsc::sync_channel::<Data>(64);
-        // data signal
         let data_signal = UnsafeSend::new(unsafe { SignalNoArgs::new() });
         // construct UI
         let ui = Ui::new(command_tx.clone(), data_rx);
         // connect data signal with UI handle_data slot method
         unsafe {
             data_signal.connect(&ui.slot_handle_data());
-            // display the UI
+            // display the UI (non-blocking)
             ui.window.widget.show();
         }
-        // run the background worker
+        // spawn the background worker
         std::thread::spawn(move || {
             worker(command_rx, data_tx, data_signal);
         });
-        // exec the Qt application
+        // execute the Qt application until user exits (blocking)
         let result: i32 = unsafe { QApplication::exec() };
         // optionally terminate the background worker
         command_tx.send(Command::Quit).unwrap();
