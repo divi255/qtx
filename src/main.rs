@@ -125,8 +125,6 @@ impl Ui {
 }
 
 fn main() {
-    // 4K hack
-    std::env::set_var("QT_AUTO_SCREEN_SCALE_FACTOR", "1");
     QApplication::init(|_| {
         let (command_tx, command_rx) = std::sync::mpsc::sync_channel::<Command>(64);
         let (data_tx, data_rx) = std::sync::mpsc::sync_channel::<Data>(64);
