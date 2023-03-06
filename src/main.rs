@@ -31,7 +31,7 @@ fn worker(
                 Command::Quit => return,
             }
         }
-        if data_tx.send(Data::Counter(counter)).is_ok() {
+        if data_tx.try_send(Data::Counter(counter)).is_ok() {
             println!("emitting signal from {:?}", std::thread::current().id());
             unsafe {
                 data_signal.emit();
